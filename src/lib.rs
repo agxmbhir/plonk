@@ -1,12 +1,10 @@
 // eq - x^3 + x + 5 == 35
 // Solution: x = 3;
 
-use ark_ff::{FftField, Field};
+use ark_ff::{FftField, Zero};
 use ark_poly::domain::general::GeneralElements;
 use ark_poly::univariate::DensePolynomial as Polynomial;
 use ark_poly::{EvaluationDomain, Evaluations, GeneralEvaluationDomain};
-use ark_test_curves::bls12_381::Fq2 as F;
-
 #[derive(Clone)]
 struct Constraint<F: FftField> {
     ql: F,
@@ -86,19 +84,7 @@ struct GateConstraints<F: FftField> {
 impl<F: FftField> GateConstraints<F> {
     // Construct a polynomial for each of the constraint vectors, assign them to the gate constraints.
 
-    fn get_constraint_vecs(
-        &self,
-        c: &Constraints<F>,
-    ) -> (
-        Vec<F>,
-        Vec<F>,
-        Vec<F>,
-        Vec<F>,
-        Vec<F>,
-        Vec<F>,
-        Vec<F>,
-        Vec<F>,
-    ) {
+    fn new(&self, c: &Constraints<F>) -> Self {
         let mut ql: Vec<F> = Vec::new();
         let mut qr: Vec<F> = Vec::new();
         let mut qo: Vec<F> = Vec::new();
@@ -118,12 +104,6 @@ impl<F: FftField> GateConstraints<F> {
             bx.push(constraint.bi);
             cx.push(constraint.ci);
         }
-        (ql, qr, qo, qm, qc, ax, bx, cx)
-    }
-
-    // Constructs evalutations for each of the constraint vectors.
-    fn construct(&self, c: &Constraints<F>) -> Self {
-        let (ql, qr, qo, qm, qc, ax, bx, cx) = self.get_constraint_vecs(c);
 
         let ql = Evaluations::from_vec_and_domain(ql, c.domain);
         let qr = Evaluations::from_vec_and_domain(qr, c.domain);
@@ -133,6 +113,7 @@ impl<F: FftField> GateConstraints<F> {
         let ax = Evaluations::from_vec_and_domain(ax, c.domain);
         let bx = Evaluations::from_vec_and_domain(bx, c.domain);
         let cx = Evaluations::from_vec_and_domain(cx, c.domain);
+
         GateConstraints {
             ql: ql.interpolate(),
             qr: qr.interpolate(),
@@ -143,5 +124,15 @@ impl<F: FftField> GateConstraints<F> {
             bx: bx.interpolate(),
             cx: cx.interpolate(),
         }
+    }
+
+    // Constructs the final constraint polynomial...
+    // ql * ax + qr * bx + qo * cx + qm * ax * bx + qc  = 0
+    fn construct(&self) -> Polynomial<F> {
+        &self.ql * &self.ax
+            + &self.qr * &self.bx
+            + &self.qo * &self.cx
+            + &(&self.qm * &self.ax) * &self.bx
+            + self.qc.clone()
     }
 }
